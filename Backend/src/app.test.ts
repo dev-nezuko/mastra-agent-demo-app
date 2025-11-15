@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import { strict as assert } from "node:assert";
-import { createApp, AgentRegistry } from "./app";
-import { AddressInfo } from "node:net";
+import { createApp, type AgentRegistry } from "./app.ts";
+import type { AddressInfo } from "node:net";
 
 async function withApp(registry: AgentRegistry, run: (url: string) => Promise<void>) {
  const server = createApp(registry).listen(0, "127.0.0.1");

@@ -1,5 +1,5 @@
-import { createApp } from "./app";
-import { mastra } from "./mastra";
+import { createApp } from "./app.ts";
+import { mastra } from "./mastra/index.ts";
 
 if (!process.env.OPENAI_API_KEY) throw new Error("Set OPENAI_API_KEY in your private environment");
 const port = Number(process.env.PORT || 3001);
