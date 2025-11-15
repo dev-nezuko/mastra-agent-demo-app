@@ -1,7 +1,7 @@
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
 
-const FileContents = `1. Start With the Customer
+export const ADVERTISING_GUIDE = `1. Start With the Customer
 - Review customer feedback, product reviews, and FAQs.
 - Pull out the words your customers use most often — these are gold for headlines.
 
@@ -30,17 +30,11 @@ const FileContents = `1. Start With the Customer
 - Tell the user exactly what to do next: Shop Now, Try Today, Learn More.
 - Place the CTA where it’s obvious and easy to click.`;
 
-
-
 export const contextTool = createTool({
   id: "context-tool",
   description: "Read the bundled static advertising guidance; no database is queried",
   outputSchema: z.object({
     output: z.string(),
   }),
-  execute: async () => {
-    return {
-      output: FileContents,
-    };
-  },
+  execute: async () => ({ output: ADVERTISING_GUIDE }),
 });
