@@ -1,8 +1,20 @@
+import { createOpenAI } from "@ai-sdk/openai";
 import { createApp } from "./app.ts";
-import { openai } from "@ai-sdk/openai";
+import { ConfigError, loadConfig } from "./config.ts";
 import { createMastra } from "./mastra/index.ts";
 
-if (!process.env.OPENAI_API_KEY) throw new Error("Set OPENAI_API_KEY in your private environment");
-const port = Number(process.env.PORT || 3001);
-if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error("Invalid PORT");
-createApp(createMastra(openai("gpt-4o-mini")), process.env.FRONTEND_ORIGIN ? { frontendOrigin: process.env.FRONTEND_ORIGIN } : {}).listen(port, "127.0.0.1", () => console.log(`Agent demo listening on http://127.0.0.1:${port}`));
+function readConfig() {
+  try {
+    return loadConfig(process.env);
+  } catch (error) {
+    if (!(error instanceof ConfigError)) throw error;
+    console.error(`Configuration error: ${error.message}`);
+    process.exit(1);
+  }
+}
+
+const config = readConfig();
+const model = createOpenAI({ apiKey: config.openaiApiKey })("gpt-4o-mini");
+createApp(createMastra(model), config).listen(config.port, config.host, () => {
+  console.log(`Agent demo listening on http://${config.host}:${config.port}`);
+});
