@@ -3,10 +3,11 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "node -r ts-node/register/transpile-only src/index.ts",
-    "dev": "nodemon --watch src --ext ts,tsx --exec \"node -r ts-node/register/transpile-only src/index.ts\"",
-    "mastra:dev": "mastra dev"
+    "test": "node --test --require ts-node/register src/app.test.ts",
+    "start": "node --env-file-if-exists=.env -r ts-node/register/transpile-only src/index.ts",
+    "dev": "nodemon --watch src --ext ts,tsx --exec \"node --env-file-if-exists=.env -r ts-node/register/transpile-only src/index.ts\"",
+    "mastra:dev": "mastra dev",
+    "typecheck": "tsc --noEmit"
   },
   "keywords": [],
   "license": "ISC",

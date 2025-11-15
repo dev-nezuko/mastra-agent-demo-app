@@ -34,7 +34,7 @@ const FileContents = `1. Start With the Customer
 
 export const contextTool = createTool({
   id: "context-tool",
-  description: "Get Context from the database",
+  description: "Read the bundled static advertising guidance; no database is queried",
   outputSchema: z.object({
     output: z.string(),
   }),

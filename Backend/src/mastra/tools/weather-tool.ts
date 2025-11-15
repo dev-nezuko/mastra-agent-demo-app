@@ -3,7 +3,7 @@ import { z } from "zod";
 
 export const weatherTool = createTool({
   id: "get-weather",
-  description: "Get current weather for a location",
+  description: "Return a static simulated weather example; never current weather",
   inputSchema: z.object({
     location: z.string().describe("City name"),
   }),
@@ -12,7 +12,7 @@ export const weatherTool = createTool({
   }),
   execute: async () => {
     return {
-      output: "The weather is sunny",
+      output: "Simulated example: sunny. No current weather provider was queried.",
     };
   },
 });

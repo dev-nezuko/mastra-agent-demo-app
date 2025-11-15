@@ -1,255 +1,78 @@
-# MCP‑Mastra — Next.js + Express + Mastra Agents
+# Mastra context-agent demo
 
-[![Node >=20](https://img.shields.io/badge/Node-%3E%3D20.10-brightgreen)](https://nodejs.org)
-[![npm](https://img.shields.io/badge/npm-10.x-orange)](https://www.npmjs.com/)
-[![TypeScript](https://img.shields.io/badge/TypeScript-Strict-blue)](https://www.typescriptlang.org/)
-[![Next.js](https://img.shields.io/badge/Next.js-15-black?logo=next.js)](https://nextjs.org/)
-[![Express](https://img.shields.io/badge/Express-5-green?logo=express)](https://expressjs.com/)
-[![Mastra](https://img.shields.io/badge/Mastra-Agents-purple)](https://www.npmjs.com/package/@mastra/core)
-[![OpenAI](https://img.shields.io/badge/OpenAI-gpt--4o--mini-00a67e?logo=openai)](https://openai.com/)
+A Next.js interface and Express API showing how a Mastra agent can consult a local tool before answering a question. The bundled context is a short advertising guide. It is static text, not a database, vector index, document upload, or retrieval pipeline.
 
-An end‑to‑end example showing how a modern Next.js frontend talks to an Express backend powered by Mastra Agents and Tools. The backend exposes simple endpoints for weather and contextual Q&A. The frontend demonstrates a minimal UI that calls these endpoints and renders the JSON response.
+![Context UI with a synthetic answer](docs/agent-desktop.png)
 
+The screenshot uses an intercepted synthetic response, not an actual model result. [Mobile preview](docs/agent-mobile.png) shows the initial state at 390px. The UI explains what the tool can supply, validates empty input, handles bad responses and errors, and sends one question at a time.
 
-### Highlights
+## Boundaries of this example
 
-- **Frontend**: Next.js 15 (App Router), React 19, lightweight UI primitives (Button, Input), Tailwind utility helpers.
-- **Backend**: Express 5, Mastra Agents with custom Tools, OpenAI model integration via `@ai-sdk/openai`.
-- **Agents/Tools**: 
-  - `contextAgent` uses `contextTool` to return curated content.
-  - `weatherAgent` scaffolding in place; a `weatherTool` exists for current weather stubs.
+Despite the original package names, this repository does not expose an MCP server or implement an MCP transport. It is a direct Express-to-Mastra integration. There is no saved conversation history, authentication, citations, streaming, model evaluation, or guaranteed tool use. Agent instructions request a tool call, but instructions alone do not prove the model followed them.
 
-
-## Architecture
-
-The project is split into two top‑level workspaces: `Frontend/` (Next.js app) and `Backend/` (Express + Mastra).
-
-```mermaid
-flowchart TD
-  A[User] --> B[NextJS App Frontend]
-  B -->|POST| C[Express API Backend]
-  C --> D[Mastra Runtime]
-  D --> E[Agents]
-  E --> F[Tools]
-  F --> G[External Services]
-
-  subgraph Frontend
-  B
-  end
-
-  subgraph Backend
-  C --> D
-  D --> E
-  E --> F
-  end
-```
-
-
-### Request Flow: Context Q&A (`POST /api/question`)
+The separate weather route is a **simulated tool demonstration**. Its agent is now wired to `weatherTool`, not the advertising guide. The tool returns a fixed example and the response includes `simulated: true`; it is not a current-weather lookup. The main UI is for context questions.
 
 ```mermaid
 sequenceDiagram
-  participant U as UserUI
-  participant FE as Frontend
-  participant BE as Backend
-  participant M as MastraContextAgent
-  participant T as ContextTool
-
-  U->>FE: Enter question and submit
-  FE->>BE: POST /api/question { question }
-  BE->>M: agent.generate(question)
-  M->>T: execute()
-  Note over T: Fetch curated context content
-  T-->>M: { output: "...curated content..." }
-  M-->>BE: { text: "answer with context" }
-  BE-->>FE: 200 OK { question, text }
-  FE-->>U: Render JSON result
+  participant Browser
+  participant Express
+  participant Agent as Mastra agent / model
+  participant Tool as Bundled context tool
+  Browser->>Express: POST /api/question
+  Express->>Express: Validate question and body size
+  Express->>Agent: generate(question)
+  Agent->>Tool: May request context
+  Tool-->>Agent: Static advertising guidance
+  Agent-->>Express: Model-written text
+  Express-->>Browser: question and text
 ```
 
+## Run locally
 
-### Request Flow: Weather (`GET /api/weather?city=...`)
+Use Node.js 22. Both folders have separate lock files; no root workspace install is defined.
 
-```mermaid
-sequenceDiagram
-  participant U as User
-  participant FE as Frontend
-  participant BE as Backend
-  participant M as MastraWeatherAgent
-  participant WT as WeatherTool
-
-  U->>BE: GET /api/weather?city=London
-  BE->>M: agent.generate("What's the weather like in London?")
-  Note over M: Agent uses tools to answer (scaffold)
-  M->>WT: execute()
-  Note over WT: Returns stubbed weather output
-  WT-->>M: { output: "The weather is sunny" }
-  M-->>BE: { text: "..." }
-  BE-->>U: 200 OK { city, text }
-```
-
-Note: In the current scaffold, `weatherTool` returns a static stub and the `weatherAgent` is wired similarly to show the integration pattern. Extend it to call a real weather API as needed.
-
-
-## Tech Stack
-
-- Frontend:
-  - Next.js `15.5.4`, React `19.1.0`, Tailwind helpers (`tailwind-merge`, `clsx`), `lucide-react`
-- Backend:
-  - Express `5.1.0`, Mastra (`@mastra/core`), `@ai-sdk/openai`, `zod`
-
-
-## Project Structure
-
-```
-/Backend
-  package.json
-  src/
-    index.ts                # Express server: routes and agent calls
-    mastra/
-      index.ts              # Mastra runtime and agent registry
-      agents/
-        context-agent.ts    # contextAgent -> uses contextTool + OpenAI model
-        weather-agent.ts    # weatherAgent -> scaffold for weather
-      tools/
-        context-tool.ts     # Returns curated content (stubbed data)
-        weather-tool.ts     # Returns stubbed weather output
-  tsconfig.json
-
-/Frontend
-  package.json
-  next.config.ts
-  src/
-    app/
-      page.tsx              # Minimal UI to POST /api/question
-      test/page.tsx         # Starter Next.js page
-    components/ui/
-      button.tsx, input.tsx # Reusable UI primitives
-    lib/
-      config.ts             # API base + endpoint builders
-      utils.ts              # Tailwind className helper
-```
-
-
-## Backend
-
-### Key Endpoints
-
-- `GET /` → Health check: "Hello World"
-- `GET /api/v1/auth/login` → Placeholder route
-- `GET /api/weather?city=London` → Calls `weatherAgent.generate(...)` and returns `{ city, text }`
-- `POST /api/question`
-  - Body: `{ "question": "..." }`
-  - Calls `mastra.getAgent("contextAgent").generate(question)`
-  - Returns `{ question, text }`
-
-### Agents and Tools
-
-- `contextAgent`
-  - Model: `openai("gpt-4o-mini")`
-  - Tooling: `contextTool` which returns curated content for demonstration
-  - Instructions emphasize calling the context tool and telling the user it was used
-
-- `weatherAgent`
-  - Model: `openai("gpt-4o-mini")`
-  - Tooling scaffold: `weatherTool` (static stub). Extend to call a real weather provider
-
-
-### Environment Variables
-
-- `OPENAI_API_KEY` (required): Needed by `@ai-sdk/openai` to access OpenAI models.
-- `PORT` (optional): Defaults to `3001`.
-
-Create `Backend/.env` (or export in your shell):
-
-```bash
-OPENAI_API_KEY=sk-live-or-test-key
-PORT=3001
-```
-
-
-### Run the Backend
-
-```bash
+```sh
 cd Backend
-npm install
-npm run dev
-# Server listens on http://localhost:3001
+npm ci --ignore-scripts
+cp .env.example .env
+# Set your own OPENAI_API_KEY in the private .env file.
+npm start
 ```
 
-### Test the API
+The Node command loads `Backend/.env` if present. The backend binds to `127.0.0.1:3001`; `FRONTEND_ORIGIN` defaults to `http://localhost:3000`. It needs a provider key for deliberate generation requests. Do not put that key in a frontend environment variable. Starting the backend constructs the agent registry; HTTP generation routes are the actions that request model output.
 
-```bash
-# Health
-curl http://localhost:3001/
+In another terminal:
 
-# Weather (stubbed)
-curl "http://localhost:3001/api/weather?city=London"
-
-# Context Q&A
-curl -X POST http://localhost:3001/api/question \
-  -H "Content-Type: application/json" \
-  -d '{"question":"What are the key ad best practices?"}'
-```
-
-
-## Frontend
-
-The main page at `src/app/page.tsx` renders an input that POSTs to the backend’s `/api/question` endpoint and pretty‑prints the JSON response.
-
-### Environment Variables
-
-- `NEXT_PUBLIC_API_BASE` (optional): Defaults to `http://localhost:3001`. Set this if your backend runs elsewhere.
-
-Create `Frontend/.env.local`:
-
-```bash
-NEXT_PUBLIC_API_BASE=http://localhost:3001
-```
-
-### Run the Frontend
-
-```bash
+```sh
 cd Frontend
-npm install
+npm ci --ignore-scripts
+cp .env.example .env.local
 npm run dev
-# App listens on http://localhost:3000
 ```
 
-Open `http://localhost:3000` in your browser. Enter a question and submit; you should see a JSON response from the backend.
+Open `http://localhost:3000`. `NEXT_PUBLIC_API_BASE` defaults to `http://localhost:3001` and is public browser configuration. Questions are sent to the configured model provider; use synthetic prompts for demonstrations. The UI stops waiting after 45 seconds, but this does not guarantee cancellation of provider work or billing on the server.
 
+## API examples
 
-## Extending the System
+`GET /` returns liveness JSON, not model/provider readiness. `POST /api/question` accepts:
 
-### Add a New Tool
+```json
+{"question":"How should an ad focus on one clear benefit?"}
+```
 
-1. Create a file under `Backend/src/mastra/tools/your-tool.ts` using `createTool` with `zod` input/output schemas.
-2. Wire the tool into an agent by adding it to the `tools` map in the agent definition.
-3. Update agent instructions with clear requirements for when and how to call the tool.
+Success is `{ "question": "...", "text": "..." }`. Questions must contain 1–2,000 characters, bodies are limited to 16 KiB, and provider failures return a generic 502 message without logging prompts or raw provider errors. `GET /api/weather?city=London` accepts one bounded city value and returns `{ "city": "London", "text": "...", "simulated": true }`. The old placeholder login route was removed; there is no login system.
 
-### Add a New Agent
+## Checks
 
-1. Create `Backend/src/mastra/agents/your-agent.ts` via `new Agent({...})`.
-2. Register it in `Backend/src/mastra/index.ts` inside the `agents: { ... }` object.
-3. Add an Express route (or reuse one) in `Backend/src/index.ts` to call `mastra.getAgent("yourAgent").generate(...)`.
+```sh
+cd Backend
+npm test
+npm run typecheck
+cd ../Frontend
+npm run build
+npm run lint
+```
 
+Three offline Node test groups pass against an injected agent registry: input limits before generation, trimmed context responses, repeated-city rejection, simulated weather marking, generic failures, and oversized bodies. Backend type checking passes. The Next.js production build includes successful frontend lint/type checking. Chrome checked synthetic success, provider failure, invalid/empty response handling, disabled empty submission, no model request on initial render, and desktop/mobile layouts. Both locked installs ran with scripts disabled.
 
-## Production Notes
-
-- Use `npm run build && npm start` patterns for both apps in production (or your preferred process manager).
-- Configure CORS and auth in `Backend/src/index.ts` for real deployments.
-- Replace stubbed tool outputs with calls to real APIs; ensure secrets are managed securely (e.g., environment managers, KMS, or platform secrets).
-- Add observability (structured logs, tracing) as needed.
-
-
-## Scripts
-
-- Backend:
-  - `npm run dev`: Nodemon + ts-node for live reload
-  - `npm run start`: Run server with ts-node register (no reload)
-  - `npm run mastra:dev`: Start Mastra dev tooling (if installed globally/locally)
-- Frontend:
-  - `npm run dev`: Next.js dev server (Turbopack)
-  - `npm run build`: Production build
-  - `npm run start`: Serve the built app
-  - `npm run lint`: Run ESLint
-
+No live model, weather service, Mastra development server, or provider account was called. Real tool invocation and answer grounding remain unverified. There is no backend rate limit, provider deadline, concurrency limit, or authenticated cost boundary; keep this local before adding a hosting plan. A useful next step is a small fixture-based tool-use evaluation with explicit expected/unsupported questions, rather than claims of autonomous reasoning.
