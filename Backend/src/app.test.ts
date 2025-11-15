@@ -3,10 +3,13 @@ import { strict as assert } from "node:assert";
 import type { AddressInfo } from "node:net";
 import { createApp, type AgentRegistry, type AppOptions } from "./app.ts";
 
-type Generate = ReturnType<AgentRegistry["getAgent"]>["generate"];
+type Agent = ReturnType<AgentRegistry["getAgent"]>;
+type Generate = Agent["generate"];
 
-async function withApp(generate: Generate, run: (url: string) => Promise<void>, options: Partial<AppOptions> = {}) {
-  const server = createApp({ getAgent: () => ({ generate }) }, options).listen(0, "127.0.0.1");
+const unusedStream: Agent["stream"] = async () => { throw new Error("stream not expected in this test"); };
+
+async function withApp(generate: Generate, run: (url: string) => Promise<void>, options: Partial<AppOptions> = {}, stream = unusedStream) {
+  const server = createApp({ getAgent: () => ({ generate, stream }) }, options).listen(0, "127.0.0.1");
   await new Promise<void>(resolve => server.once("listening", resolve));
   try {
     await run(`http://127.0.0.1:${(server.address() as AddressInfo).port}`);
