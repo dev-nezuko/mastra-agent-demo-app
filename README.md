@@ -1,47 +1,66 @@
 # Mastra context-agent demo
 
-A Next.js interface and Express API showing how a Mastra agent can consult a local tool before answering a question. The bundled context is a short advertising guide. It is static text, not a database, vector index, document upload, or retrieval pipeline.
+A small Next.js "copy desk" in front of an Express API that hosts two [Mastra](https://mastra.ai) agents. You ask one question about writing an ad. The context agent is told to call a local tool that returns a short, bundled advertising guide, and its answer streams back into the page as it is written.
 
-![Context UI with a synthetic answer](docs/agent-desktop.png)
+The guide is seven static bullet lists. There is no database, vector index, upload or retrieval pipeline. The point of the repository is the plumbing around an agent call: input limits, a server-side deadline, streaming with honest failure reporting, and a test suite that never needs a provider key.
 
-The screenshot uses an intercepted synthetic response, not an actual model result. [Mobile preview](docs/agent-mobile.png) shows the initial state at 390px. The UI explains what the tool can supply, validates empty input, handles bad responses and errors, and sends one question at a time.
+![Streamed answer from the offline demo model](docs/screenshots/agent-answer-desktop.png)
 
-## Boundaries of this example
+All screenshots use the offline demo model described below, not a real model result. More: [a mid-stream provider failure](docs/screenshots/agent-error-desktop.png) and [the empty state at 390 px](docs/screenshots/agent-empty-mobile.png).
 
-Despite the original package names, this repository does not expose an MCP server or implement an MCP transport. It is a direct Express-to-Mastra integration. There is no saved conversation history, authentication, citations, streaming, model evaluation, or guaranteed tool use. Agent instructions request a tool call, but instructions alone do not prove the model followed them.
+## What it does and does not do
 
-The separate weather route is a **simulated tool demonstration**. Its agent is now wired to `weatherTool`, not the advertising guide. The tool returns a fixed example and the response includes `simulated: true`; it is not a current-weather lookup. The main UI is for context questions.
+- **Context agent** (`POST /api/question`, `POST /api/question/stream`). Its instructions ask it to call `contextTool` and answer from the guide. Instructions do not guarantee that a real model follows them, and answers are not checked against the guide.
+- **Weather agent** (`GET /api/weather`). This is a simulated tool demonstration. `weatherTool` returns a fixed "sunny" line for the requested city, and the response carries `simulated: true`. It is not a weather lookup, and the UI does not use it.
+- **Two model modes.** `MODEL_PROVIDER=openai` uses `gpt-4o-mini` with your own key. `MODEL_PROVIDER=demo` uses an offline stand-in built on the AI SDK's `MockLanguageModelV4`. The stand-in really drives the Mastra agent loop (tool call, tool result, final text), but its words are canned: it quotes the guide section that shares the most words with your question.
+- Not included: an MCP server or transport, conversation memory, authentication, rate limiting, citations or evaluation. The original package names mentioned MCP; nothing here implements it.
 
 ```mermaid
 sequenceDiagram
-  participant Browser
-  participant Express
-  participant Agent as Mastra agent / model
-  participant Tool as Bundled context tool
-  Browser->>Express: POST /api/question
-  Express->>Express: Validate question and body size
-  Express->>Agent: generate(question)
-  Agent->>Tool: May request context
-  Tool-->>Agent: Static advertising guidance
-  Agent-->>Express: Model-written text
-  Express-->>Browser: question and text
+  participant Browser as Next.js page
+  participant API as Express API
+  participant Agent as Mastra agent
+  participant Model as Model (OpenAI or demo)
+  participant Tool as contextTool
+  Browser->>API: POST /api/question/stream {question}
+  API->>API: Validate 1-2,000 chars, 16 KiB body
+  API->>Agent: stream(question, abortSignal)
+  Agent->>Model: prompt + tool schema
+  Model-->>Agent: tool call
+  Agent->>Tool: execute()
+  Tool-->>Agent: bundled guide text
+  Agent->>Model: prompt + tool result
+  Model-->>API: text deltas (or an error chunk)
+  API-->>Browser: NDJSON lines, ending in done or error
 ```
 
-## Run locally
+## Quick start with Docker Compose
 
-Use Node.js 22. Both folders have separate lock files; no root workspace install is defined.
+```sh
+docker compose up --build
+```
+
+Open http://localhost:3000. With no key in your shell, the backend starts the offline demo model and logs `with the offline demo model (no provider calls)`. To use a real model:
+
+```sh
+MODEL_PROVIDER=openai OPENAI_API_KEY=<your key> docker compose up --build
+```
+
+Both images run as the unprivileged `node` user, and both ports are bound to 127.0.0.1. If 3000 or 3001 is taken, set `FRONTEND_PORT` and/or `BACKEND_PORT`; the CORS origin and the API address built into the UI follow them.
+
+## Running without Docker
+
+Use Node.js 22.18 or later (see `.nvmrc`). The backend runs its TypeScript sources directly through Node's built-in type stripping, so there is no build step. The two folders have separate lock files.
 
 ```sh
 cd Backend
 npm ci --ignore-scripts
 cp .env.example .env
-# Set your own OPENAI_API_KEY in the private .env file.
+# In Backend/.env set MODEL_PROVIDER=demo, or keep openai and fill in OPENAI_API_KEY.
 npm start
 ```
 
-The Node command loads `Backend/.env` if present. The backend binds to `127.0.0.1:3001`; `FRONTEND_ORIGIN` defaults to `http://localhost:3000`. It needs a provider key for deliberate generation requests. Do not put that key in a frontend environment variable. Starting the backend constructs the agent registry; HTTP generation routes are the actions that request model output.
-
-In another terminal:
+In a second terminal:
 
 ```sh
 cd Frontend
@@ -50,29 +69,84 @@ cp .env.example .env.local
 npm run dev
 ```
 
-Open `http://localhost:3000`. `NEXT_PUBLIC_API_BASE` defaults to `http://localhost:3001` and is public browser configuration. Questions are sent to the configured model provider; use synthetic prompts for demonstrations. The UI stops waiting after 45 seconds, but this does not guarantee cancellation of provider work or billing on the server.
+Open http://localhost:3000. Keep the provider key in `Backend/.env` only; `NEXT_PUBLIC_API_BASE` is public browser configuration.
 
-## API examples
+### Backend settings
 
-`GET /` returns liveness JSON, not model/provider readiness. `POST /api/question` accepts:
+| Variable | Default | Notes |
+|---|---|---|
+| `MODEL_PROVIDER` | `openai` | `openai` or `demo`. |
+| `OPENAI_API_KEY` | none | Required only for `openai`. If it is missing, startup prints one `Configuration error:` line and exits 1. |
+| `HOST` / `PORT` | `127.0.0.1` / `3001` | The Docker image sets `HOST=0.0.0.0`. |
+| `FRONTEND_ORIGIN` | `http://localhost:3000` | The CORS allow-list. A trailing slash is normalised away. |
+| `MODEL_TIMEOUT_MS` | `40000` | Server deadline per model call (1,000 to 120,000). It sits under the page's 45 s timeout, so the server reports the timeout first. |
 
-```json
-{"question":"How should an ad focus on one clear benefit?"}
-```
+## API
 
-Success is `{ "question": "...", "text": "..." }`. Questions must contain 1–2,000 characters, bodies are limited to 16 KiB, and provider failures return a generic 502 message without logging prompts or raw provider errors. `GET /api/weather?city=London` accepts one bounded city value and returns `{ "city": "London", "text": "...", "simulated": true }`. The old placeholder login route was removed; there is no login system.
-
-## Checks
+The responses below were captured from the Compose stack running the demo model.
 
 ```sh
-cd Backend
-npm test
-npm run typecheck
-cd ../Frontend
-npm run build
-npm run lint
+curl -s -X POST localhost:3001/api/question -H 'Content-Type: application/json' \
+  -d '{"question":"What counts as good social proof?"}'
 ```
 
-Three offline Node test groups pass against an injected agent registry: input limits before generation, trimmed context responses, repeated-city rejection, simulated weather marking, generic failures, and oversized bodies. Backend type checking passes. The Next.js production build includes successful frontend lint/type checking. Chrome checked synthetic success, provider failure, invalid/empty response handling, disabled empty submission, no model request on initial render, and desktop/mobile layouts. Both locked installs ran with scripts disabled.
+```json
+{"question":"What counts as good social proof?","text":"Demo model reply (no provider was called). I used the context tool, and the closest part of the bundled guide is:\n\n5. Build Social Proof\n- Feature a short customer quote, rating, or proof point (e.g., “10,000+ happy customers”).\n- This builds instant credibility."}
+```
 
-No live model, weather service, Mastra development server, or provider account was called. Real tool invocation and answer grounding remain unverified. There is no backend rate limit, provider deadline, concurrency limit, or authenticated cost boundary; keep this local before adding a hosting plan. A useful next step is a small fixture-based tool-use evaluation with explicit expected/unsupported questions, rather than claims of autonomous reasoning.
+`POST /api/question/stream` takes the same body and answers `application/x-ndjson`, one event per line:
+
+```text
+{"type":"text","delta":"Demo "}
+{"type":"text","delta":"model "}
+{"type":"text","delta":"reply "}
+...
+{"type":"done"}
+```
+
+The final line is always either `{"type":"done"}` or a single `{"type":"error","message":"..."}`, even if text has already been sent. The page keeps the partial text and marks it "Answer interrupted".
+
+```sh
+curl -s 'localhost:3001/api/weather?city=Porto'
+```
+
+```json
+{"city":"Porto","text":"Demo model reply. The weather tool says: Simulated example for Porto: sunny. No current weather provider was queried.","simulated":true}
+```
+
+Errors are JSON `{"error": "..."}`:
+
+| Status | When |
+|---|---|
+| 400 | Empty or over-long question, repeated `city`, malformed JSON |
+| 413 / 415 | Body over 16 KiB / unsupported charset |
+| 502 | Provider failure or an empty answer. Raw provider messages are not returned. |
+| 504 | The model missed `MODEL_TIMEOUT_MS` |
+
+`GET /` is a liveness check only; it does not test the provider.
+
+## Design notes
+
+- **Deadlines that actually fire.** Under Mastra 1.x an aborted `generate()` resolves with empty text and `finishReason: "aborted"` instead of throwing. Without an explicit check, a stalled provider would come back as a blank 200. Each call gets `AbortSignal.any([deadline, client-disconnect])`, so a closed tab also stops provider work.
+- **Stream errors are in-band.** Mastra reports provider failures as `error` chunks inside `fullStream`, not as exceptions. The API turns them into the terminal NDJSON error event. On the client, `readAnswerStream` treats a stream that ends without `done` as unfinished, not complete.
+- **Tool input is validated.** The weather tool's `location` is trimmed and limited to 1-120 characters. Invalid calls come back to the model as a structured tool error instead of running.
+- **Testable without a key.** Agents are built by `createMastra(model)`, so tests pass in `MockLanguageModelV4` and exercise the real Mastra loop.
+- `@ai-sdk/openai` is pinned to 4.0.106 and `ai` to 7.0.160. These match the provider build bundled inside `@mastra/core` 1.82; newer patches fail type checking against Mastra's model type.
+
+## Tests and checks
+
+```sh
+cd Backend && npm test && npm run typecheck
+cd ../Frontend && npm test && npm run lint && npm run build
+```
+
+- **Backend:** 25 `node:test` cases. They cover HTTP validation and limits, timeouts (both resolving-aborted and rejecting providers), client-disconnect aborts, NDJSON streaming and its error paths (one through a real Mastra agent with a failing mock model), startup configuration, tool input validation, and the demo model.
+- **Frontend:** 5 cases for the stream reader (split lines, error events, truncated streams, unreadable lines, HTTP error messages).
+
+No test, screenshot or example in this repository called a live model or weather service. Screenshots were taken with Playwright in Chromium against the demo model; the error screenshot injects a failing stream at the network layer.
+
+Not covered: real tool-use reliability with `gpt-4o-mini`, answer quality, and any cost boundary. There is no rate limit or authentication, so keep this on localhost.
+
+## License
+
+MIT, see [LICENSE](LICENSE).
