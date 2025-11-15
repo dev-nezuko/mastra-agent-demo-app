@@ -5,7 +5,7 @@ export type Config = {
   port: number;
   frontendOrigin: string;
   modelTimeoutMs: number;
-  openaiApiKey: string;
+  model: { provider: "openai"; apiKey: string } | { provider: "demo" };
 };
 
 type Env = Record<string, string | undefined>;
@@ -28,17 +28,24 @@ function origin(env: Env) {
   return url.origin;
 }
 
-export function loadConfig(env: Env): Config {
-  const openaiApiKey = env.OPENAI_API_KEY?.trim() ?? "";
-  if (!openaiApiKey) {
-    throw new ConfigError("OPENAI_API_KEY is not set. Copy Backend/.env.example to Backend/.env and add your own key.");
+function model(env: Env): Config["model"] {
+  const provider = env.MODEL_PROVIDER?.trim() || "openai";
+  if (provider === "demo") return { provider };
+  if (provider !== "openai") throw new ConfigError(`MODEL_PROVIDER must be "openai" or "demo" (got "${provider}").`);
+  const apiKey = env.OPENAI_API_KEY?.trim() ?? "";
+  if (!apiKey) {
+    throw new ConfigError("OPENAI_API_KEY is not set. Copy Backend/.env.example to Backend/.env and add your own key, or set MODEL_PROVIDER=demo to run the offline demo model.");
   }
-  if (/\s/.test(openaiApiKey)) throw new ConfigError("OPENAI_API_KEY contains whitespace; check the value in Backend/.env.");
+  if (/\s/.test(apiKey)) throw new ConfigError("OPENAI_API_KEY contains whitespace; check the value in Backend/.env.");
+  return { provider, apiKey };
+}
+
+export function loadConfig(env: Env): Config {
   return {
     host: env.HOST?.trim() || "127.0.0.1",
     port: integer(env, "PORT", 3001, 1, 65535),
     frontendOrigin: origin(env),
     modelTimeoutMs: integer(env, "MODEL_TIMEOUT_MS", 40_000, 1_000, 120_000),
-    openaiApiKey,
+    model: model(env),
   };
 }

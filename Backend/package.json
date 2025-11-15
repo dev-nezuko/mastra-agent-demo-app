@@ -16,6 +16,7 @@
   "dependencies": {
     "@ai-sdk/openai": "4.0.106",
     "@mastra/core": "^1.82.0",
+    "ai": "7.0.160",
     "cors": "^2.8.6",
     "express": "^5.3.0",
     "zod": "^4.6.7"
@@ -24,7 +25,6 @@
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
     "@types/node": "^22.20.5",
-    "ai": "7.0.160",
     "typescript": "^6.0.3"
   }
 }

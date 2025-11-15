@@ -13,8 +13,13 @@ test("a missing key fails with a message that says where to put it", () => {
   assert.throws(() => loadConfig({ OPENAI_API_KEY: "abc def" }), /whitespace/);
 });
 
+test("the offline demo model needs no key and unknown providers are rejected", () => {
+  assert.deepEqual(loadConfig({ MODEL_PROVIDER: "demo" }).model, { provider: "demo" });
+  assert.throws(() => loadConfig({ MODEL_PROVIDER: "anthropic", OPENAI_API_KEY: key }), /MODEL_PROVIDER must be "openai" or "demo"/);
+});
+
 test("defaults keep the server on loopback with a 40 s model deadline", () => {
-  assert.deepEqual(loadConfig({ OPENAI_API_KEY: key }), { host: "127.0.0.1", port: 3001, frontendOrigin: "http://localhost:3000", modelTimeoutMs: 40_000, openaiApiKey: key });
+  assert.deepEqual(loadConfig({ OPENAI_API_KEY: key }), { host: "127.0.0.1", port: 3001, frontendOrigin: "http://localhost:3000", modelTimeoutMs: 40_000, model: { provider: "openai", apiKey: key } });
 });
 
 test("numbers and origins are validated and normalised", () => {
