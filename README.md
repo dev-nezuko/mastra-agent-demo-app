@@ -25,13 +25,13 @@ An end‑to‑end example showing how a modern Next.js frontend talks to an Expr
 The project is split into two top‑level workspaces: `Frontend/` (Next.js app) and `Backend/` (Express + Mastra).
 
 ```mermaid
-graph TD
-  A[User (Browser)] --> B[Next.js App (Frontend)]
-  B -->|fetch/POST| C[Express API (Backend)]
+flowchart TD
+  A[User] --> B[NextJS App Frontend]
+  B -->|POST| C[Express API Backend]
   C --> D[Mastra Runtime]
   D --> E[Agents]
   E --> F[Tools]
-  F --> G[(External Services)]
+  F --> G[External Services]
 
   subgraph Frontend
   B
@@ -49,16 +49,17 @@ graph TD
 
 ```mermaid
 sequenceDiagram
-  participant U as User (Next.js UI)
-  participant FE as Frontend (Next.js)
-  participant BE as Backend (Express)
-  participant M as Mastra (contextAgent)
-  participant T as contextTool
+  participant U as UserUI
+  participant FE as Frontend
+  participant BE as Backend
+  participant M as MastraContextAgent
+  participant T as ContextTool
 
-  U->>FE: Enter question + submit
+  U->>FE: Enter question and submit
   FE->>BE: POST /api/question { question }
   BE->>M: agent.generate(question)
-  M->>T: execute() // fetch curated context content
+  M->>T: execute()
+  Note over T: Fetch curated context content
   T-->>M: { output: "...curated content..." }
   M-->>BE: { text: "answer with context" }
   BE-->>FE: 200 OK { question, text }
@@ -71,15 +72,16 @@ sequenceDiagram
 ```mermaid
 sequenceDiagram
   participant U as User
-  participant FE as Frontend (optional)
-  participant BE as Backend (Express)
-  participant M as Mastra (weatherAgent)
-  participant WT as weatherTool
+  participant FE as Frontend
+  participant BE as Backend
+  participant M as MastraWeatherAgent
+  participant WT as WeatherTool
 
   U->>BE: GET /api/weather?city=London
   BE->>M: agent.generate("What's the weather like in London?")
-  Note over M: Agent uses tools to answer (scaffold present)
-  M->>WT: execute() // returns stubbed weather output
+  Note over M: Agent uses tools to answer (scaffold)
+  M->>WT: execute()
+  Note over WT: Returns stubbed weather output
   WT-->>M: { output: "The weather is sunny" }
   M-->>BE: { text: "..." }
   BE-->>U: 200 OK { city, text }
