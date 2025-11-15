@@ -1,0 +1,22 @@
+# Starts the API and UI. Without OPENAI_API_KEY it runs the offline demo model;
+# set MODEL_PROVIDER=openai and OPENAI_API_KEY in your shell to use a real model.
+services:
+  backend:
+    build: ./Backend
+    environment:
+      MODEL_PROVIDER: ${MODEL_PROVIDER:-demo}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      FRONTEND_ORIGIN: http://localhost:${FRONTEND_PORT:-3000}
+    ports:
+      - "127.0.0.1:${BACKEND_PORT:-3001}:3001"
+
+  frontend:
+    build:
+      context: ./Frontend
+      args:
+        NEXT_PUBLIC_API_BASE: http://localhost:${BACKEND_PORT:-3001}
+    ports:
+      - "127.0.0.1:${FRONTEND_PORT:-3000}:3000"
+    depends_on:
+      backend:
+        condition: service_healthy
